@@ -64,7 +64,7 @@ elif env_version != version:
 CMAKE = shutil.which('cmake3') or shutil.which('cmake')
 assert (
     CMAKE
-), 'The "cmake" executable is not found. Please check if Cmake is installed. test1 test2 test3'
+), 'The "cmake" executable is not found. Please check if Cmake is installed.'
 
 
 TOP_DIR = os.path.dirname(os.path.realpath(__file__))
