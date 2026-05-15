@@ -41,7 +41,7 @@ __global__ void AdamKernelREG(MT beta1,
                               MT* moment2_out,
                               const MT* moment2_max,
                               MT* moment2_max_out,
-                              const MT* lr_,
+                              const double* lr_,
                               const TG* grad,
                               const T* param,
                               T* param_out,
@@ -49,9 +49,16 @@ __global__ void AdamKernelREG(MT beta1,
                               MT* master_param_out,
                               int64_t ndim,
                               bool amsgrad) {
-  MT lr = *lr_;
+  MT lr = static_cast<MT>(*lr_);
   MT beta1_pow = beta1_pow_;
   MT beta2_pow = beta2_pow_;
+
+  if (threadIdx.x == 0) {
+    printf("AdamKernelREG lr = %.15f, beta1_pow = %.15f, beta2_pow = %.15f\n",
+           lr,
+           beta1_pow,
+           beta2_pow);
+  }
 
   int64_t id =
       static_cast<int64_t>(blockIdx.x) * static_cast<int64_t>(blockDim.x) +
@@ -101,7 +108,7 @@ __global__ void AdamKernelMEM(MT beta1,
                               MT* moment2_out,
                               const MT* moment2_max,
                               MT* moment2_max_out,
-                              const MT* lr_,
+                              const double* lr_,
                               const TG* grad,
                               const T* param,
                               T* param_out,
@@ -109,9 +116,16 @@ __global__ void AdamKernelMEM(MT beta1,
                               MT* master_param_out,
                               int64_t ndim,
                               bool amsgrad) {
-  MT lr = *lr_;
+  MT lr = static_cast<MT>(*lr_);
   MT beta1_pow = *beta1_pow_;
   MT beta2_pow = *beta2_pow_;
+
+  if (threadIdx.x == 0) {
+    printf("AdamKernelMEM lr = %.15f, beta1_pow = %.15f, beta2_pow = %.15f\n",
+           lr,
+           beta1_pow,
+           beta2_pow);
+  }
 
   int64_t id =
       static_cast<int64_t>(blockIdx.x) * static_cast<int64_t>(blockDim.x) +
@@ -190,6 +204,8 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
   using MT = typename MPTypeTrait<T>::Type;
   const auto grad_type = grad.dtype();
 
+  printf("call  GPU AdamDenseKernel \n");
+
   VLOG(4) << "use_global_beta_pow:" << use_global_beta_pow;
   VLOG(4) << "amsgrad: " << amsgrad;
 
@@ -260,7 +276,10 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
   int64_t blocks_max = dev_ctx.GetCUDAMaxGridDimSize()[0];
   int blocks = std::min((param.numel() + threads - 1) / threads, blocks_max);
 
+  printf("111111\n");
+
   if (beta1_pow.place() == CPUPlace() && beta2_pow.place() == CPUPlace()) {
+    printf("call AdamKernelREG\n");
     // Compute with betapow in REG
     if (grad_type == DataType::FLOAT32) {
       AdamKernelREG<T, float, MT><<<blocks, threads, 0, dev_ctx.stream()>>>(
@@ -275,7 +294,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           dev_ctx.template Alloc<MT>(moment2_out),
           moment2_max_in_data,
           moment2_max_out_data,
-          learning_rate.data<MT>(),
+          learning_rate.data<double>(),
           grad.data<float>(),
           param.data<T>(),
           dev_ctx.template Alloc<T>(param_out),
@@ -296,7 +315,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           dev_ctx.template Alloc<MT>(moment2_out),
           moment2_max_in_data,
           moment2_max_out_data,
-          learning_rate.data<MT>(),
+          learning_rate.data<double>(),
           grad.data<T>(),
           param.data<T>(),
           dev_ctx.template Alloc<T>(param_out),
@@ -313,6 +332,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           beta2_ * beta2_pow.data<MT>()[0];
     }
   } else {
+    printf("call AdamKernelMEM\n");
     if (grad_type == DataType::FLOAT32) {
       AdamKernelMEM<T, float, MT><<<blocks, threads, 0, dev_ctx.stream()>>>(
           beta1_,
@@ -326,7 +346,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           dev_ctx.template Alloc<MT>(moment2_out),
           moment2_max_in_data,
           moment2_max_out_data,
-          learning_rate.data<MT>(),
+          learning_rate.data<double>(),
           grad.data<float>(),
           param.data<T>(),
           dev_ctx.template Alloc<T>(param_out),
@@ -347,7 +367,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           dev_ctx.template Alloc<MT>(moment2_out),
           moment2_max_in_data,
           moment2_max_out_data,
-          learning_rate.data<MT>(),
+          learning_rate.data<double>(),
           grad.data<T>(),
           param.data<T>(),
           dev_ctx.template Alloc<T>(param_out),
@@ -367,6 +387,7 @@ PADDLE_API void AdamDenseKernel(const Context& dev_ctx,
           dev_ctx.template Alloc<MT>(beta2_pow_out));
     }
   }
+  printf("22222\n");
 }
 
 template <typename T, typename Context>
@@ -437,7 +458,7 @@ void MergedAdamKernel(
             dev_ctx.template Alloc<MT>(moment2_out[idx]),
             moment2_max_in_data,
             moment2_max_out_data,
-            learning_rate[idx]->data<MT>(),
+            learning_rate[idx]->data<double>(),
             grad[idx]->data<float>(),
             param[idx]->data<T>(),
             dev_ctx.template Alloc<T>(param_out[idx]),
@@ -458,7 +479,7 @@ void MergedAdamKernel(
             dev_ctx.template Alloc<MT>(moment2_out[idx]),
             moment2_max_in_data,
             moment2_max_out_data,
-            learning_rate[idx]->data<MT>(),
+            learning_rate[idx]->data<double>(),
             grad[idx]->data<T>(),
             param[idx]->data<T>(),
             dev_ctx.template Alloc<T>(param_out[idx]),
@@ -488,7 +509,7 @@ void MergedAdamKernel(
             dev_ctx.template Alloc<MT>(moment2_out[idx]),
             moment2_max_in_data,
             moment2_max_out_data,
-            learning_rate[idx]->data<MT>(),
+            learning_rate[idx]->data<double>(),
             grad[idx]->data<float>(),
             param[idx]->data<T>(),
             dev_ctx.template Alloc<T>(param_out[idx]),
@@ -509,7 +530,7 @@ void MergedAdamKernel(
             dev_ctx.template Alloc<MT>(moment2_out[idx]),
             moment2_max_in_data,
             moment2_max_out_data,
-            learning_rate[idx]->data<MT>(),
+            learning_rate[idx]->data<double>(),
             grad[idx]->data<T>(),
             param[idx]->data<T>(),
             dev_ctx.template Alloc<T>(param_out[idx]),
